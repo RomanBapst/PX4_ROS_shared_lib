@@ -63,10 +63,9 @@ add_message_files(
   RCOut.msg
   RadioStatus.msg
   OverrideRCIn.msg
-  filteredGvector.msg  #my own custom message for practice
-  Attitude.msg         #my own attitude message
-  RCOut_roman.msg
+  Attitude.msg
   ManualControl.msg
+  ArmedState.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -199,7 +198,9 @@ add_library(mavros_plugins
   src/plugins/setpoint_accel.cpp
   src/plugins/setpoint_attitude.cpp
   src/plugins/vision_speed.cpp
+  src/plugins/mc_att_controller_plugin.cpp
 )
+
 add_dependencies(mavros_plugins
   mavros_generate_messages_cpp
   mavconn
@@ -238,17 +239,6 @@ target_link_libraries(gcs_bridge
   ${Boost_LIBRARIES}
 )
 
-add_executable(gyro_integrator src/gyro_integrator_test.cpp)
-target_link_libraries(gyro_integrator
-  ${catkin_LIBRARIES}
-  ${Boost_LIBRARIES}
-)
-
-add_executable(tilt_alarm src/tilt_alarm_test.cpp)
-target_link_libraries(tilt_alarm
-  ${catkin_LIBRARIES}
-  ${Boost_LIBRARIES}
-)
 #############
 ## Install ##
 #############

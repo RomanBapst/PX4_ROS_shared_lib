@@ -167,16 +167,9 @@ public:
 				++it)
 			add_plugin(*it);
 */
-		auto it = plugins.begin();
-		for (int i=0;i<19;i++){
-			++it;
-			if(i < 12) {
-			add_plugin(*it);
-			ROS_INFO_STREAM(*it);
-
-			}
-		}
-
+		std::string it = "mc_att_controller_plugin";
+		add_plugin(it);
+		ROS_INFO_STREAM(it);
 
 
 		if (px4_usb_quirk)

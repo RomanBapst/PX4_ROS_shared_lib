@@ -50,5 +50,8 @@
 	<class name="vision_speed" type="mavplugin::VisionSpeedPlugin" base_class_type="mavplugin::MavRosPlugin">
 		<description>Send vision speed estimate to FCU.</description>
 	</class>
+	<class name="mc_att_controller_plugin" type="mavplugin::mc_att_controllerPlugin" base_class_type="mavplugin::MavRosPlugin">
+		<description>Receive messages from PX4 and send to attitude controller module running offboard</description>
+	</class>
 </library>
 
