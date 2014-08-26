@@ -45,7 +45,7 @@
 
 #include <stdio.h>
 #include <math.h>
-//#include <math/arm_math.h>
+#include <math/eigen_math.h>
 
 namespace math
 {
@@ -63,17 +63,17 @@ public:
 	float data[N];
 
 	/**
-	 * struct for using arm_math functions, represents column vector
+	 * struct for using vector form eigen library, represents column vector
 	 */
-	//arm_matrix_instance_f32 arm_col;
+	eigen_matrix_instance eigen_col;
 
 	/**
 	 * trivial ctor
 	 * initializes elements to zero
 	 */
 	VectorBase() :
-		data{}
-		//arm_col{N, 1, &data[0]}
+		data{},
+		eigen_col{N, 1, &data[0]}
 	{
 
 	}
@@ -83,8 +83,8 @@ public:
 	/**
 	 * copy ctor
 	 */
-	VectorBase(const VectorBase<N> &v)// :
-		//arm_col{N, 1, &data[0]}
+	VectorBase(const VectorBase<N> &v) :
+		eigen_col{N, 1, &data[0]}
 	{
 		memcpy(data, v.data, sizeof(data));
 	}
@@ -92,8 +92,8 @@ public:
 	/**
 	 * setting ctor
 	 */
-	VectorBase(const float d[N])// :
-		//arm_col{N, 1, &data[0]}
+	VectorBase(const float d[N]) :
+		eigen_col{N, 1, &data[0]}
 	{
 		memcpy(data, d, sizeof(data));
 	}
