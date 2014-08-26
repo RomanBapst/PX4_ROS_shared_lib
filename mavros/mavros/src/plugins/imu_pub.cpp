@@ -217,11 +217,6 @@ private:
 				imu_msg->angular_velocity,
 				imu_msg->linear_acceleration);
 
-		msg_att.q1 = imu_msg->orientation.x;
-		msg_att.q2 = imu_msg->orientation.y;
-		msg_att.q3 = imu_msg->orientation.z;
-		msg_att.q4 = imu_msg->orientation.w;
-
 		// publish data
 		imu_msg->header.frame_id = frame_id;
 		imu_msg->header.stamp = ros::Time::now();
