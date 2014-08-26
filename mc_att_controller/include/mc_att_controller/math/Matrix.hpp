@@ -46,7 +46,8 @@
 #define M_PI_2_F 1.570769
 
 #include <stdio.h>
-//#include "../CMSIS/Include/arm_math.h"
+#include <math/eigen_math.h>
+#include <eigen/eigen/Eigen/Dense>
 
 namespace math
 {
@@ -65,17 +66,17 @@ public:
 	float data[M][N];
 
 	/**
-	 * struct for using arm_math functions
+	 * struct for using functions from the eigen library
 	 */
-	//arm_matrix_instance_f32 arm_mat;
+	eigen_matrix_instance eigen_mat;
 
 	/**
 	 * trivial ctor
 	 * Initializes the elements to zero.
 	 */
 	MatrixBase() : 
-		data{}
-		//arm_mat{M, N, &data[0][0]}
+		data{},
+		eigen_mat{M, N, &data[0][0]}
 	{
 	}
 
@@ -84,20 +85,20 @@ public:
 	/**
 	 * copyt ctor
 	 */
-	MatrixBase(const MatrixBase<M, N> &m)// :
-		//arm_mat{M, N, &data[0][0]}
+	MatrixBase(const MatrixBase<M, N> &m) :
+		eigen_mat{M, N, &data[0][0]}
 	{
 		memcpy(data, m.data, sizeof(data));
 	}
 
-	MatrixBase(const float *d)// :
-		//arm_mat{M, N, &data[0][0]}
+	MatrixBase(const float *d) :
+		eigen_mat{M, N, &data[0][0]}
 	{
 		memcpy(data, d, sizeof(data));
 	}
 
-	MatrixBase(const float d[M][N])// :
-		//arm_mat{M, N, &data[0][0]}
+	MatrixBase(const float d[M][N]) :
+		eigen_mat{M, N, &data[0][0]}
 	{
 		memcpy(data, d, sizeof(data));
 	}
@@ -275,8 +276,10 @@ public:
 	 */
 	template <unsigned int P>
 	Matrix<M, P> operator *(const Matrix<N, P> &m) const {
-		Matrix<M, P> res;
-		//arm_mat_mult_f32(&arm_mat, &m.arm_mat, &res.arm_mat);
+		Eigen::Matrix<float,M,N,Eigen::RowMajor> Me  = Eigen::Map<Eigen::Matrix<float,M,N,Eigen::RowMajor> >(this->eigen_mat.pData);
+		Eigen::Matrix<float,N,P,Eigen::RowMajor> Him  = Eigen::Map<Eigen::Matrix<float,N,P,Eigen::RowMajor> >(m.eigen_mat.pData);
+		Eigen::Matrix<float,M,P,Eigen::RowMajor> Product = Me * Him;
+		Matrix<M, P> res(Product.data());
 		return res;
 	}
 
@@ -284,8 +287,9 @@ public:
 	 * transpose the matrix
 	 */
 	Matrix<N, M> transposed(void) const {
-		Matrix<N, M> res;
-		//arm_mat_trans_f32(&this->arm_mat, &res.arm_mat);
+		Eigen::Matrix<float,N,M,Eigen::RowMajor> Me  = Eigen::Map<Eigen::Matrix<float,N,M,Eigen::RowMajor> >(this->eigen_mat.pData);
+		Me.transposeInPlace();
+		Matrix<N, M> res(Me.data());
 		return res;
 	}
 
@@ -293,8 +297,9 @@ public:
 	 * invert the matrix
 	 */
 	Matrix<M, N> inversed(void) const {
-		Matrix<M, N> res;
-		//arm_mat_inverse_f32(&this->arm_mat, &res.arm_mat);
+		Eigen::Matrix<float,M,N,Eigen::RowMajor> Me  = Eigen::Map<Eigen::Matrix<float,M,N,Eigen::RowMajor> >(this->eigen_mat.pData);
+		Eigen::Matrix<float,M,N,Eigen::RowMajor> MyInverse = Me.inverse();	//not sure if A = A.inverse() is a good idea
+		Matrix<M, N> res(MyInverse.data());
 		return res;
 	}
 
@@ -354,8 +359,10 @@ public:
 	 * multiplication by a vector
 	 */
 	Vector<M> operator *(const Vector<N> &v) const {
-		Vector<M> res;
-		//arm_mat_mult_f32(&this->arm_mat, &v.arm_col, &res.arm_col);
+		Eigen::Matrix<float,M,N,Eigen::RowMajor> Me  = Eigen::Map<Eigen::Matrix<float,M,N,Eigen::RowMajor> >(this->eigen_mat.pData);
+		Eigen::VectorXf Vec  = Eigen::Map<Eigen::VectorXf>(v.eigen_col.pData,N);
+		Eigen::VectorXf Product = Me * Vec;
+		Vector<M> res(Product.data());
 		return res;
 	}
 };
