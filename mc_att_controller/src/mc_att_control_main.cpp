@@ -67,9 +67,8 @@
 #include <geo/geo.h>
 #include <ros/ros.h>
 #include <mavros/ManualControl.h>
-#include <mavros/RCOut_roman.h>
-#include <mavros/State.h>
-#include <sensor_msgs/Imu.h>
+#include <mavros/AttitudeRates.h>
+#include <mavros/ArmedState.h>
 #include <mavros/Attitude.h>
 #include <time.h>
 
@@ -111,14 +110,10 @@ private:
 
 	//ros publishers
 	ros::Publisher _actuators_0_pub;
+	ros::Publisher att_rates_pub;
 
 	double time_last;	//used to measure elapsed time
 
-	int		_v_rates_sp_sub;		/**< vehicle rates setpoint subscription */
-	int _att_sp_pub;
-	int _v_rates_sp_pub; //put correct publisher here, this is just for testing
-	//
-	bool		_actuators_0_circuit_breaker_enabled;	/**< circuit breaker to suppress output */
 	//
 	struct vehicle_attitude_s			_v_att;				/**< vehicle attitude */
 	struct vehicle_attitude_setpoint_s	_v_att_sp;			/**< vehicle attitude setpoint */
@@ -158,95 +153,92 @@ private:
 
 	void attitude_cb(const mavros::Attitude msg);
 	void rc_cb(const mavros::ManualControl msg);
-	void armed_status_cb(mavros::State msg);
+	void armed_status_cb(mavros::ArmedState msg);
+
+	void fill_rates_msg(mavros::AttitudeRates &msg);
 
 	void task_main(); //run the main task, this needs to be triggerd by a callback, not sure yet which one
 	void control_attitude(double dt);
 	void control_attitude_rates(float dt);
 
 	double get_dt();	//get time since last call [seconds]
-	void quaternion_to_dcm(const float quaternion[4], float dcm[3][3]);
 };
 
 MulticopterAttitudeControl::MulticopterAttitudeControl()
 {
 	//setup all subscribers
-			attitude_sub = n.subscribe("mavros/imu/Attitude",1000,&MulticopterAttitudeControl::attitude_cb,this);
-			rc_sub = n.subscribe("mavros/rc/in",1000,&MulticopterAttitudeControl::rc_cb,this);
-			armed_status_sub = n.subscribe("mavros/state",1000,&MulticopterAttitudeControl::armed_status_cb,this);
+	attitude_sub = n.subscribe("mavros/imu/Attitude",1000,&MulticopterAttitudeControl::attitude_cb,this);
+	rc_sub = n.subscribe("mavros/ManualSetpoint",1000,&MulticopterAttitudeControl::rc_cb,this);
+	armed_status_sub = n.subscribe("mavros/ArmedState",1000,&MulticopterAttitudeControl::armed_status_cb,this);
 
-			//setup all publishers
-			_actuators_0_pub = n.advertise<mavros::RCOut_roman>("MulticopterAttitudeControl/RCOut",10);
-
-
-			//setup time variable, this is used by the class-method 'get_dt()'
-			time_last = ros::Time::now().toSec();
-
-			//init circuit-braker
-			_actuators_0_circuit_breaker_enabled = false;
-
-			//initialize topic data holders
-			memset(&_v_att, 0, sizeof(_v_att));
-			memset(&_v_att_sp, 0, sizeof(_v_att_sp));
-			memset(&_v_rates_sp, 0, sizeof(_v_rates_sp));
-			memset(&_manual_control_sp, 0, sizeof(_manual_control_sp));
-			memset(&_v_control_mode, 0, sizeof(_v_control_mode));
-			memset(&_actuators, 0, sizeof(_actuators));
-			//memset(&_armed, 0, sizeof(_armed));
-			_armed.armed = true;
-
-				_params.att_p.zero();
-				_params.rate_p.zero();
-				_params.rate_i.zero();
-				_params.rate_d.zero();
-				_params.yaw_ff = 0.0f;
-				_params.yaw_rate_max = 0.0f;
-				_params.man_roll_max = 0.0f;
-				_params.man_pitch_max = 0.0f;
-				_params.man_yaw_max = 0.0f;
-				_params.acro_rate_max.zero();
-
-				_rates_prev.zero();
-				_rates_sp.zero();
-				_rates_int.zero();
-				_thrust_sp = 0.0f;
-				_att_control.zero();
-
-				_I.identity();
-
-			//set control mode flags, this is a hack, need to get them from the board
-			_v_control_mode.flag_control_attitude_enabled = true;
-			_v_control_mode.flag_control_rates_enabled = true;
-			_v_control_mode.flag_control_manual_enabled = true;
-			_v_control_mode.flag_control_climb_rate_enabled = false;
-			_v_control_mode.flag_control_velocity_enabled = false;
-			_v_control_mode.flag_control_auto_enabled = true;
-			_v_control_mode.flag_control_position_enabled = true;
+	//setup all publishers
+	att_rates_pub = n.advertise<mavros::AttitudeRates>("MulticopterAttitudeContro/att_rates",10);
 
 
-			//set parameters, hardcoded for now
-			/* roll gains */
-				_params.att_p(0) = 7.0;
-				_params.rate_p(0) = 0.1;
-				_params.rate_i(0) = 0.0;
-				_params.rate_d(0) = 0.003;
+	//setup time variable, this is used by the class-method 'get_dt()'
+	time_last = ros::Time::now().toSec();
 
-				/* pitch gains */
-				_params.att_p(1) = 7.0;
-				_params.rate_p(1) = 0.1;
-				_params.rate_i(1) = 0.0;
-				_params.rate_d(1) = 0.003;
+	//initialize topic data holders
+	memset(&_v_att, 0, sizeof(_v_att));
+	memset(&_v_att_sp, 0, sizeof(_v_att_sp));
+	memset(&_v_rates_sp, 0, sizeof(_v_rates_sp));
+	memset(&_manual_control_sp, 0, sizeof(_manual_control_sp));
+	memset(&_v_control_mode, 0, sizeof(_v_control_mode));
+	memset(&_actuators, 0, sizeof(_actuators));
+	//memset(&_armed, 0, sizeof(_armed));
+	_armed.armed = true;
 
-				/* yaw gains */
-				_params.att_p(2) = 2.8;
-				_params.rate_p(2) = 0.2;
-				_params.rate_i(2) = 0.1;
-				_params.rate_d(2) = 0.0;
+	_params.att_p.zero();
+	_params.rate_p.zero();
+	_params.rate_i.zero();
+	_params.rate_d.zero();
+	_params.yaw_ff = 0.0f;
+	_params.yaw_rate_max = 0.0f;
+	_params.man_roll_max = 0.0f;
+	_params.man_pitch_max = 0.0f;
+	_params.man_yaw_max = 0.0f;
+	_params.acro_rate_max.zero();
+
+	_rates_prev.zero();
+	_rates_sp.zero();
+	_rates_int.zero();
+	_thrust_sp = 0.0f;
+	_att_control.zero();
+
+	_I.identity();
+
+	//set control mode flags, this is a hack, need to get them from the board
+	_v_control_mode.flag_control_attitude_enabled = true;
+	_v_control_mode.flag_control_rates_enabled = true;
+	_v_control_mode.flag_control_manual_enabled = true;
+	_v_control_mode.flag_control_climb_rate_enabled = false;
+	_v_control_mode.flag_control_velocity_enabled = false;
+	_v_control_mode.flag_control_auto_enabled = true;
+	_v_control_mode.flag_control_position_enabled = true;
 
 
-				_params.yaw_rate_max = 0.5;
-				_params.yaw_ff = 0.5;
+	//set parameters, hardcoded for now
+	/* roll gains */
+	_params.att_p(0) = 7.0;
+	_params.rate_p(0) = 0.1;
+	_params.rate_i(0) = 0.0;
+	_params.rate_d(0) = 0.003;
 
+	/* pitch gains */
+	_params.att_p(1) = 7.0;
+	_params.rate_p(1) = 0.1;
+	_params.rate_i(1) = 0.0;
+	_params.rate_d(1) = 0.003;
+
+	/* yaw gains */
+	_params.att_p(2) = 2.8;
+	_params.rate_p(2) = 0.2;
+	_params.rate_i(2) = 0.1;
+	_params.rate_d(2) = 0.0;
+
+
+	_params.yaw_rate_max = 0.5;
+	_params.yaw_ff = 0.5;
 
 
 	_params.man_roll_max = 0.6;
@@ -295,13 +287,20 @@ void MulticopterAttitudeControl::rc_cb(const mavros::ManualControl msg)
 	//still have to fill out all other field, like timestamp...
 }
 
-void MulticopterAttitudeControl::armed_status_cb(mavros::State msg)
+void MulticopterAttitudeControl::armed_status_cb(mavros::ArmedState msg)
 {
 
-	_armed.armed = msg.armed;
+	_armed.armed = msg.armedStatus;
 
 }
 
+void MulticopterAttitudeControl::fill_rates_msg(mavros::AttitudeRates &msg)
+{
+	msg.rollrate = _v_rates_sp.roll;
+	msg.pitchrate = _v_rates_sp.pitch;
+	msg.yawrate = _v_rates_sp.yaw;
+	msg.thrust = _v_rates_sp.thrust;
+}
 
 double MulticopterAttitudeControl::get_dt()
 {
@@ -309,30 +308,6 @@ double MulticopterAttitudeControl::get_dt()
 	time_last = ros::Time::now().toSec();
 	return ros::Time::now().toSec() - helper;
 }
-
-void MulticopterAttitudeControl::quaternion_to_dcm(const float quaternion[4], float dcm[3][3])
-{
-    double a = quaternion[0];
-    double b = quaternion[1];
-    double c = quaternion[2];
-    double d = quaternion[3];
-    double aSq = a * a;
-    double bSq = b * b;
-    double cSq = c * c;
-    double dSq = d * d;
-    dcm[0][0] = aSq + bSq - cSq - dSq;
-    dcm[0][1] = 2.0 * (b * c - a * d);
-    dcm[0][2] = 2.0 * (a * c + b * d);
-    dcm[1][0] = 2.0 * (b * c + a * d);
-    dcm[1][1] = aSq - bSq + cSq - dSq;
-    dcm[1][2] = 2.0 * (c * d - a * b);
-    dcm[2][0] = 2.0 * (b * d - a * c);
-    dcm[2][1] = 2.0 * (a * b + c * d);
-    dcm[2][2] = aSq - bSq - cSq + dSq;
-}
-
-
-
 
 void MulticopterAttitudeControl::control_attitude(double dt)
 {
@@ -409,7 +384,6 @@ void MulticopterAttitudeControl::control_attitude(double dt)
 		}
 
 		_thrust_sp = _v_att_sp.thrust;
-		ROS_INFO("Thrust setpointn %.5f",_thrust_sp);
 
 		/* construct attitude setpoint rotation matrix */
 		math::Matrix<3, 3> R_sp;
@@ -429,17 +403,9 @@ void MulticopterAttitudeControl::control_attitude(double dt)
 
 		/* publish the attitude setpoint if needed */
 		if (publish_att_sp) {
-			//_v_att_sp.timestamp = hrt_absolute_time();
-			_v_att_sp.timestamp = 0; //put correct time here
-
-			if (_att_sp_pub > 0) {
-				//orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_v_att_sp);
-				//publish
-
-			} else {
-				//_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_v_att_sp);
-				//check if this is even needed in ros
-			}
+			mavros::AttitudeRates message;
+			fill_rates_msg(message);
+			att_rates_pub.publish(message);
 		}
 		/* rotation matrix for current state */
 		math::Matrix<3, 3> R;
@@ -456,13 +422,6 @@ void MulticopterAttitudeControl::control_attitude(double dt)
 		e_R(0) = R(0,0)*help(0) + R(1,0)*help(1) + R(2,0)*help(2);
 		e_R(1) = R(0,1)*help(0) + R(1,1)*help(1) + R(2,1)*help(2);
 		e_R(2) = R(0,2)*help(0) + R(1,2)*help(1) + R(2,2)*help(2);
-//		ROS_INFO("ER %.5f",e_R(0));
-//		ROS_INFO("ER %.5f",e_R(1));
-//		ROS_INFO("ER %.5f",e_R(2));
-//
-//		ROS_INFO("help %.5f",help(0));
-//		ROS_INFO("help %.5f",help(1));
-//		ROS_INFO("help %.5f",help(2));
 
 		/* calculate angle error */
 		float e_R_z_sin = e_R.length();
@@ -528,52 +487,9 @@ void MulticopterAttitudeControl::control_attitude(double dt)
 		/* feed forward yaw setpoint rate */
 
 		_rates_sp(2) += yaw_sp_move_rate * yaw_w * _params.yaw_ff;
-		ROS_INFO("Rates setpoint0: %.5f",(double)_rates_sp(0));
-		ROS_INFO("Rates setpoint1: %.5f",(double)_rates_sp(1));
-		ROS_INFO("Rates setpoint2: %.5f",(double)_rates_sp(2));
+
 
 }
-
-void
-MulticopterAttitudeControl::control_attitude_rates(float dt)
-{
-	/* reset integral if disarmed */
-	if (!_armed.armed) {
-		_rates_int.zero();
-
-	}
-
-	/* current body angular rates */
-	math::Vector<3> rates;
-	rates(0) = _v_att.rollspeed;
-	rates(1) = _v_att.pitchspeed;
-	rates(2) = _v_att.yawspeed;
-	ROS_INFO("yawspeed %.5f",rates(2));
-
-
-	/* angular rates error */
-	math::Vector<3> rates_err = _rates_sp - rates;
-	ROS_INFO("Rates error yaw %.5f",rates_err(2));
-	ROS_INFO("Rates error: %f",rates_err(0));
-	_att_control = _params.rate_p.emult(rates_err) + _params.rate_d.emult(_rates_prev - rates) / dt + _rates_int;
-	_rates_prev = rates;
-
-	/* update integral only if not saturated on low limit */
-	if (_thrust_sp > MIN_TAKEOFF_THRUST) {
-		for (int i = 0; i < 3; i++) {
-			if (fabsf(_att_control(i)) < _thrust_sp) {
-				float rate_i = _rates_int(i) + _params.rate_i(i) * rates_err(i) * dt;
-
-				if (std::isfinite(rate_i) && rate_i > -RATES_I_LIMIT && rate_i < RATES_I_LIMIT && //isfinite function should be fixed
-				    _att_control(i) > -RATES_I_LIMIT && _att_control(i) < RATES_I_LIMIT) {
-					_rates_int(i) = rate_i;
-				}
-			}
-		}
-	}
-}
-
-
 
 void MulticopterAttitudeControl::task_main()
 {
@@ -590,7 +506,6 @@ void MulticopterAttitudeControl::task_main()
 		dt = 0.02f;
 	}
 
-	ROS_INFO("Running main task, dt is: %f",dt);
 
 
 	if (_v_control_mode.flag_control_attitude_enabled) {
@@ -603,13 +518,10 @@ void MulticopterAttitudeControl::task_main()
 					_v_rates_sp.thrust = _thrust_sp;
 					_v_rates_sp.timestamp = 0;	//put time here
 
-					if (_v_rates_sp_pub > 0) {
-						//orb_publish(ORB_ID(vehicle_rates_setpoint), _v_rates_sp_pub, &_v_rates_sp);
-						//publish data
-
-					} else {
-						//_v_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_v_rates_sp);
-					}
+					//publish attitude rates
+					mavros::AttitudeRates message;
+					fill_rates_msg(message);
+					att_rates_pub.publish(message);
 
 				} else {
 					/* attitude controller disabled, poll rates setpoint topic */
@@ -629,14 +541,10 @@ void MulticopterAttitudeControl::task_main()
 						_v_rates_sp.thrust = _thrust_sp;
 						_v_rates_sp.timestamp = 0;	//put correct timestamp
 
-						if (_v_rates_sp_pub > 0) {
-							//orb_publish(ORB_ID(vehicle_rates_setpoint), _v_rates_sp_pub, &_v_rates_sp);
-							//publish
-
-						} else {
-							//_v_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_v_rates_sp);
-							//advertise if needed
-						}
+						//publish attitude rates
+						mavros::AttitudeRates message;
+						fill_rates_msg(message);
+						att_rates_pub.publish(message);
 
 					} else {
 						/* attitude controller disabled, poll rates setpoint topic */
@@ -648,43 +556,6 @@ void MulticopterAttitudeControl::task_main()
 					}
 				}
 
-				if (_v_control_mode.flag_control_rates_enabled) {
-					control_attitude_rates(dt);
-
-					/* publish actuator controls */
-//					_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
-//					_actuators.control[1] = (isfinite(_att_control(1))) ? _att_control(1) : 0.0f;
-//					_actuators.control[2] = (isfinite(_att_control(2))) ? _att_control(2) : 0.0f;
-//					_actuators.control[3] = (isfinite(_thrust_sp)) ? _thrust_sp : 0.0f;
-//					_actuators.timestamp = hrt_absolute_time();
-					//need to implement isfinite again, this is just for testing!!!!!!!!!!!!!!!
-					_actuators.control[0] = _att_control(0);
-					_actuators.control[1] = _att_control(1);
-					_actuators.control[2] = _att_control(2);
-					_actuators.control[3] = _thrust_sp;
-					_actuators.timestamp = 0; //put correct time here
-					ROS_INFO("actuator0 %.5f",_actuators.control[0]);
-					ROS_INFO("actuator1 %.5f",_actuators.control[1]);
-					ROS_INFO("actuator2 %.5f",_actuators.control[2]);
-					ROS_INFO("actuator3 %.5f",_actuators.control[3]);
-
-					if (!_actuators_0_circuit_breaker_enabled) {
-						if (1 > 0) {
-							//orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
-							//publish the controls
-							mavros::RCOut_roman msg;
-							msg.channel1 = _actuators.control[0];
-							msg.channel2 = _actuators.control[1];
-							msg.channel3 = _actuators.control[2];
-							msg.channel4 = _actuators.control[3];
-							_actuators_0_pub.publish(msg);
-
-						} else {
-							//_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
-							//advertis, check if this is even needed in ros
-						}
-					}
-				}
 			}
 
 int main(int argc, char **argv)
