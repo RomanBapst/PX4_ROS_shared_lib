@@ -54,23 +54,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 #include <math.h>
-#include <poll.h>
 
-#include <vector>
 
 #include <math/Vector.hpp>
 #include <math/Matrix.hpp>
 #include <math/Limits.hpp>
 #include <math/Quaternion.hpp>
 #include <geo/geo.h>
+
 #include <ros/ros.h>
+#include <time.h>
+
 #include <mavros/ManualControl.h>
 #include <mavros/AttitudeRates.h>
 #include <mavros/ArmedState.h>
 #include <mavros/Attitude.h>
-#include <time.h>
 
 #include <manual_control_setpoint.h>
 #include <vehicle_attitude.h>
@@ -217,7 +216,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl()
 	_v_control_mode.flag_control_position_enabled = true;
 
 
-	//set parameters, hardcoded for now
+	//set parameters, hard-coded for now
 	/* roll gains */
 	_params.att_p(0) = 7.0;
 	_params.rate_p(0) = 0.1;
@@ -247,6 +246,8 @@ MulticopterAttitudeControl::MulticopterAttitudeControl()
 
 }
 
+//this function is automatically called if a mavlink attitude message arrives from the PIXHAWK
+//this function triggers the main-task function, which calculates the attitude rates setpoint
 void MulticopterAttitudeControl::attitude_cb(const mavros::Attitude msg)
 {
 	_v_att.roll = msg.roll;
@@ -311,6 +312,7 @@ double MulticopterAttitudeControl::get_dt()
 
 void MulticopterAttitudeControl::control_attitude(double dt)
 {
+
 	float yaw_sp_move_rate = 0.0f;
 		bool publish_att_sp = false;
 
@@ -417,11 +419,7 @@ void MulticopterAttitudeControl::control_attitude(double dt)
 		math::Vector<3> R_sp_z(R_sp(0, 2), R_sp(1, 2), R_sp(2, 2));
 
 		/* axis and sin(angle) of desired rotation */
-		math::Vector<3> e_R; //= R.transposed() * (R_z % R_sp_z);
-		math::Vector<3> help = (R_z % R_sp_z);
-		e_R(0) = R(0,0)*help(0) + R(1,0)*help(1) + R(2,0)*help(2);
-		e_R(1) = R(0,1)*help(0) + R(1,1)*help(1) + R(2,1)*help(2);
-		e_R(2) = R(0,2)*help(0) + R(1,2)*help(1) + R(2,2)*help(2);
+		math::Vector<3> e_R = R.transposed() * (R_z % R_sp_z);
 
 		/* calculate angle error */
 		float e_R_z_sin = e_R.length();
