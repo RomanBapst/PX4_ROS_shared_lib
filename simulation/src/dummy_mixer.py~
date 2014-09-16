@@ -1,0 +1,12 @@
+ #!/usr/bin/env python
+import rospy
+from std_msgs.msg import String
+
+def run_node():
+    pub = rospy.Publisher("dummy",String)
+    
+    while not rospy.is_shutdown():
+        pub.publish("Hello, I am a rospy node and I function!")
+
+if __name__ == '__main__':
+    run_node()
