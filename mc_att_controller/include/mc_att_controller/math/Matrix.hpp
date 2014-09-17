@@ -47,7 +47,7 @@
 
 #include <stdio.h>
 #include <math/eigen_math.h>
-#include <eigen/eigen/Eigen/Dense>
+#include <eigen/Eigen/Dense>
 
 namespace math
 {
