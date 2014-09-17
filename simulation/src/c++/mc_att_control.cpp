@@ -516,13 +516,9 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	rates(0) = _v_att.rollspeed;
 	rates(1) = _v_att.pitchspeed;
 	rates(2) = _v_att.yawspeed;
-	ROS_INFO("yawspeed %.5f",rates(2));
-
 
 	/* angular rates error */
 	math::Vector<3> rates_err = _rates_sp - rates;
-	ROS_INFO("Rates error yaw %.5f",rates_err(2));
-	ROS_INFO("Rates error: %f",rates_err(0));
 	_att_control = _params.rate_p.emult(rates_err) + _params.rate_d.emult(_rates_prev - rates) / dt + _rates_int;
 	_rates_prev = rates;
 
@@ -618,7 +614,7 @@ void MulticopterAttitudeControl::task_main()
 						_actuators.control[0] = _att_control(0);
 						_actuators.control[1] = _att_control(1);
 						_actuators.control[2] = _att_control(2);
-						_actuators.control[3] = _thrust_sp;
+						_actuators.control[3] = _thrus             t_sp;
 						_actuators.timestamp = 0; //put correct time here
 
 						if (!_actuators_0_circuit_breaker_enabled) {
