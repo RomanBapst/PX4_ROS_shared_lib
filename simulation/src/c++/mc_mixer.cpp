@@ -8,6 +8,7 @@
 #include <math/Vector.hpp>
 #include <actuator_controls.h>
 
+namespace {
 
 float constrain(float val, float min, float max)
 {
@@ -22,10 +23,8 @@ public:
 	MultirotorMixer();
 	~MultirotorMixer();
 
-	void mix(struct actuator_controls_s &inputs, float &outputs);
+	void mix(struct actuator_controls_s &inputs, float *outputs);
 
-
-private:
 
 	struct Rotor
 	{
@@ -35,8 +34,9 @@ private:
 
 	};
 
+private:
 	const Rotor	*_rotors;
-	const int _rotor_count;
+	unsigned _rotor_count;
 
 };
 
@@ -49,13 +49,18 @@ const MultirotorMixer::Rotor _config_quadshot[] =
 		{ -0.3223, -0.9466,  -1.0000 },
 };
 
-MultirotorMixer::MultirotorMixer()
+const MultirotorMixer::Rotor *_config_index = {
+		&_config_quadshot[0]
+
+};
+MultirotorMixer::MultirotorMixer():
+		_rotor_count(4),
+		_rotors(_config_index)
 {
-	_rotors = &_config_quadshot;
-	_rotor_count = 4;
+
 }
 
-void MultirotorMixer::mix(struct actuator_controls_s &inputs, float &outputs)
+void MultirotorMixer::mix(struct actuator_controls_s &inputs, float *outputs)
 {
 	float		roll    = constrain(inputs.control[0], -1.0f, 1.0f);
 	float		pitch   = constrain(inputs.control[1], -1.0f, 1.0f);
@@ -117,4 +122,5 @@ void MultirotorMixer::mix(struct actuator_controls_s &inputs, float &outputs)
 	}
 
 
+}
 }
