@@ -105,8 +105,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-pymavlink
   ${catkin_INCLUDE_DIRS}
+  include/simulation
 )
 
 ## Declare a cpp library
@@ -126,10 +126,13 @@ pymavlink
 #   ${catkin_LIBRARIES}
 # )
 
-#add_executable(simulation src/dummy_mixer.py)
-#target_link_libraries(simulation
-#  ${catkin_LIBRARIES}
-#)
+
+
+add_executable(mc_att_controller_sim src/c++/mc_att_control.cpp include/simulation/math/Limits.cpp include/simulation/geo/geo.cpp)
+target_link_libraries(mc_att_controller_sim
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
 
 #############
 ## Install ##
