@@ -47,6 +47,7 @@ def publish(simout_data):
     global fdm, pub
     fdm.parse(simout_data)
     fg_out.send(fdm.pack())
+    rospy.loginfo("flightgear elevator")
     msg = simout()
     msg.roll = fdm.get('phi',units='radians')               #roll
     msg.pitch = fdm.get('theta',units='radians')            #pitch
