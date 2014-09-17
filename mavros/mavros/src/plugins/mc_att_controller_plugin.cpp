@@ -1,8 +1,7 @@
-#include <cmath>
+//@author: Roman Bapst
+
 #include <mavros/mavros_plugin.h>
 #include <pluginlib/class_list_macros.h>
-#include <tf/transform_datatypes.h>
-
 #include <mavros/Attitude.h>
 #include <mavros/ManualControl.h>
 #include <mavros/ArmedState.h>
@@ -25,9 +24,9 @@ public:
 		uas = &uas_;
 
 
-		imu_attitude_pub = nh.advertise<mavros::Attitude>("imu/Attitude",10);
+		imu_attitude_pub 	= nh.advertise<mavros::Attitude>("imu/Attitude",10);
 		manual_setpoint_pub = nh.advertise<mavros::ManualControl>("ManualSetpoint",10);
-		armed_state_pub = nh.advertise<mavros::ArmedState>("ArmedState",10);
+		armed_state_pub 	= nh.advertise<mavros::ArmedState>("ArmedState",10);
 //
 	}
 
@@ -52,49 +51,39 @@ private:
 	ros::Publisher armed_state_pub;
 
 
-
-
 	/* -*- message handlers -*- */
 
 	void handle_attitude(const mavlink_message_t *msg, uint8_t sysid, uint8_t compid) {
 
 		mavlink_attitude_t att;
 		mavlink_msg_attitude_decode(msg, &att);
-
-
 		mavros::Attitude msg_att;
-		msg_att.roll = att.roll;
-		msg_att.pitch = att.pitch;
-		msg_att.yaw = att.yaw;
-		msg_att.rollspeed = att.rollspeed;
-		msg_att.pitchspeed = att.pitchspeed;
-		msg_att.yawspeed = att.yawspeed;
-
-
+		msg_att.roll 		= att.roll;
+		msg_att.pitch 		= att.pitch;
+		msg_att.yaw 		= att.yaw;
+		msg_att.rollspeed 	= att.rollspeed;
+		msg_att.pitchspeed 	= att.pitchspeed;
+		msg_att.yawspeed 	= att.yawspeed;
 		imu_attitude_pub.publish(msg_att);
 	}
 
 	void handle_manual_setpoint(const mavlink_message_t *msg, uint8_t sysid, uint8_t compid) {
-			mavlink_manual_control_t Controls;
-			mavlink_msg_manual_control_decode(msg,&Controls);
-
-			mavros::ManualControl message;
-			message.x = Controls.x;
-			message.y = Controls.y;
-			message.z = Controls.z;
-			message.r = Controls.r;
-			manual_setpoint_pub.publish(message);
+		mavlink_manual_control_t Controls;
+		mavlink_msg_manual_control_decode(msg,&Controls);
+		mavros::ManualControl message;
+		message.x = Controls.x;
+		message.y = Controls.y;
+		message.z = Controls.z;
+		message.r = Controls.r;
+		manual_setpoint_pub.publish(message);
 	}
 
 	void handle_armed_state(const mavlink_message_t *msg, uint8_t sysid, uint8_t compid) {
-			mavlink_heartbeat_t hb;
-			mavlink_msg_heartbeat_decode(msg, &hb);
-			mavros::ArmedState message;
-
-			message.armedStatus = hb.base_mode & MAV_MODE_FLAG_SAFETY_ARMED;
-
-
-			armed_state_pub.publish(message);
+		mavlink_heartbeat_t hb;
+		mavlink_msg_heartbeat_decode(msg, &hb);
+		mavros::ArmedState message;
+		message.armedStatus = hb.base_mode & MAV_MODE_FLAG_SAFETY_ARMED;
+		armed_state_pub.publish(message);
 		}
 
 };
