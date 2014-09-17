@@ -128,7 +128,7 @@ include_directories(
 
 
 
-add_executable(mc_att_controller_sim src/c++/mc_att_control.cpp include/simulation/math/Limits.cpp include/simulation/geo/geo.cpp)
+add_executable(mc_att_controller_sim src/c++/mc_att_control.cpp include/simulation/math/Limits.cpp include/simulation/geo/geo.cpp src/c++/mc_mixer.cpp)
 target_link_libraries(mc_att_controller_sim
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
