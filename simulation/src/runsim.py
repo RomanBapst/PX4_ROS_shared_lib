@@ -26,9 +26,11 @@ def process_jsb_input(mixer_out_msg):
          jsb_set('fcs/aileron-cmd-norm', mixer_out_msg.aileron)
          sim_state.aileron = mixer_out_msg.aileron
     if mixer_out_msg.elevator != sim_state.elevator:
-         jsb_set('fcs/elevator-cmd-norm', mixer_out_msg.elevator)
+         jsb_set('fcs/elevator-cmd-norm', -mixer_out_msg.elevator)
          sim_state.elevator = mixer_out_msg.elevator
-         """
+         
+    jsb_set('fcs/throttle-cmd-norm',mixer_out_msg.throttle_0)
+    """
     if mixer_out_msg.throttle_0 != sim_state.throttle[0]:
         jsb_set('fcs/throttle-cmd-norm[0]',mixer_out_msg.throttle_0)
         sim_state.throttle[0] = mixer_out_msg.throttle_0
@@ -47,7 +49,6 @@ def publish(simout_data):
     global fdm, pub
     fdm.parse(simout_data)
     fg_out.send(fdm.pack())
-    rospy.loginfo("flightgear elevator")
     msg = simout()
     msg.roll = fdm.get('phi',units='radians')               #roll
     msg.pitch = fdm.get('theta',units='radians')            #pitch
@@ -62,7 +63,6 @@ def publish(simout_data):
 
 def mixer_out_cb(mixer_out_msg):
     global jsb_in, fdm, jsb_console
-    rospy.loginfo("getting message")
     """send data from mixer to JSBsim"""
     process_jsb_input(mixer_out_msg) #inputs are sent to jsbsim
     """"now wait until we get data from jsbsim so that we can publish it
