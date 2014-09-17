@@ -71,6 +71,8 @@
 #include <mavros/ArmedState.h>
 #include <mavros/Attitude.h>
 
+#include <simulation/mixer_out.h>
+
 #include <manual_control_setpoint.h>
 #include <vehicle_attitude.h>
 #include <vehicle_attitude_setpoint.h>
@@ -161,6 +163,7 @@ private:
 	void task_main(); //run the main task, this needs to be triggerd by a callback, not sure yet which one
 	void control_attitude(double dt);
 	void control_attitude_rates(float dt);
+	void mix_and_publish();		//mix desired controls and publish on topic (Simulator can subscribe to it)
 
 	double get_dt();	//get time since last call [seconds]
 };
@@ -313,6 +316,11 @@ double MulticopterAttitudeControl::get_dt()
 	double helper = time_last;
 	time_last = ros::Time::now().toSec();
 	return ros::Time::now().toSec() - helper;
+}
+
+void MulticopterAttitudeControl::mix_and_publish(void)
+{
+	ROS_INFO("We mix and then publish on mixer_out topic");
 }
 
 void MulticopterAttitudeControl::control_attitude(double dt)
@@ -614,20 +622,8 @@ void MulticopterAttitudeControl::task_main()
 						_actuators.timestamp = 0; //put correct time here
 
 						if (!_actuators_0_circuit_breaker_enabled) {
-							if (1 > 0) {
-								//orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
-								//publish the controls
-								mavros::RCOut_roman msg;
-								msg.channel1 = _actuators.control[0];
-								msg.channel2 = _actuators.control[1];
-								msg.channel3 = _actuators.control[2];
-								msg.channel4 = _actuators.control[3];
-								_actuators_0_pub.publish(msg);
+							mix_and_publish();
 
-							} else {
-								//_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
-								//advertise, check if this is even needed in ros
-							}
 						}
 					}
 
