@@ -94,9 +94,18 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
+  include/fw_att_controller
   ${catkin_INCLUDE_DIRS}
 )
 
+
+add_executable(fw_att_controller src/fw_att_controller.cpp src/math/Limits.cpp include/fw_att_controller/geo/geo.cpp
+  src/attitude_fw/ecl_roll_controller.cpp src/attitude_fw/ecl_pitch_controller.cpp src/attitude_fw/ecl_yaw_controller.cpp
+ src/ecl_time_ROS.cpp)
+target_link_libraries(fw_att_controller
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
 ## Declare a cpp library
 # add_library(fw_att_controller
 #   src/${PROJECT_NAME}/fw_att_controller.cpp
