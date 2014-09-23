@@ -69,9 +69,9 @@
 #include <mavros/ManualControl.h>
 #include <mavros/AttitudeRates.h>
 #include <mavros/ArmedState.h>
-#include <mavros/Attitude.h>
 
 #include <simulation/mixer_out.h>
+#include <simulation/simout.h>
 
 #include <manual_control_setpoint.h>
 #include <vehicle_attitude.h>
@@ -81,6 +81,7 @@
 #include <actuator_armed.h>
 #include <actuator_controls.h>
 
+#include "mc_mixer.cpp"
 
 #define YAW_DEADZONE	0.05f
 #define MIN_TAKEOFF_THRUST    0.2f
@@ -112,6 +113,7 @@ private:
 	//ros publishers
 	ros::Publisher _actuators_0_pub;
 	ros::Publisher att_rates_pub;
+	ros::Publisher mixer_out_pub;
 
 	double time_last;	//used to measure elapsed time
 
@@ -135,6 +137,8 @@ private:
 
 	math::Matrix<3, 3>  _I;				/**< identity matrix */
 
+	MultirotorMixer *mcMixer;
+
 
 //
 	bool	_reset_yaw_sp;			/**< reset yaw setpoint flag */
@@ -154,7 +158,7 @@ private:
 	}		_params;
 
 
-	void attitude_cb(const mavros::Attitude msg);
+	void attitude_cb(const simulation::simout msg);
 	void rc_cb(const mavros::ManualControl msg);
 	void armed_status_cb(mavros::ArmedState msg);
 
@@ -171,12 +175,13 @@ private:
 MulticopterAttitudeControl::MulticopterAttitudeControl()
 {
 	//setup all subscribers
-	attitude_sub = n.subscribe("mavros/imu/Attitude",1000,&MulticopterAttitudeControl::attitude_cb,this);
+	attitude_sub = n.subscribe("simout",1000,&MulticopterAttitudeControl::attitude_cb,this);
 	rc_sub = n.subscribe("mavros/ManualSetpoint",1000,&MulticopterAttitudeControl::rc_cb,this);
 	armed_status_sub = n.subscribe("mavros/ArmedState",1000,&MulticopterAttitudeControl::armed_status_cb,this);
 
 	//setup all publishers
-	att_rates_pub = n.advertise<mavros::AttitudeRates>("MulticopterAttitudeContro/att_rates",10);
+	att_rates_pub = n.advertise<mavros::AttitudeRates>("MulticopterAttitudeControl/att_rates",10);
+	mixer_out_pub = n.advertise<simulation::mixer_out>("mixer_out",10);
 
 
 	//setup time variable, this is used by the class-method 'get_dt()'
@@ -184,6 +189,9 @@ MulticopterAttitudeControl::MulticopterAttitudeControl()
 
 	//init circuit-braker
 	_actuators_0_circuit_breaker_enabled = false;
+
+	//create Mixer
+	mcMixer = new MultirotorMixer();
 
 	//initialize topic data holders
 	memset(&_v_att, 0, sizeof(_v_att));
@@ -226,21 +234,21 @@ MulticopterAttitudeControl::MulticopterAttitudeControl()
 
 	//set parameters, hard-coded for now
 	/* roll gains */
-	_params.att_p(0) = 7.0;
-	_params.rate_p(0) = 0.1;
-	_params.rate_i(0) = 0.0;
-	_params.rate_d(0) = 0.003;
+	_params.att_p(0) = 3;
+	_params.rate_p(0) = 0.01;
+	_params.rate_i(0) = 0.00;
+	_params.rate_d(0) = 0.01;
 
 	/* pitch gains */
-	_params.att_p(1) = 7.0;
-	_params.rate_p(1) = 0.1;
-	_params.rate_i(1) = 0.0;
-	_params.rate_d(1) = 0.003;
+	_params.att_p(1) = 5.0;
+	_params.rate_p(1) = 0.01;
+	_params.rate_i(1) = 0.01;
+	_params.rate_d(1) = 0.01;
 
 	/* yaw gains */
-	_params.att_p(2) = 2.8;
-	_params.rate_p(2) = 0.2;
-	_params.rate_i(2) = 0.1;
+	_params.att_p(2) = 3;
+	_params.rate_p(2) = 0.1;
+	_params.rate_i(2) = 0.00;
 	_params.rate_d(2) = 0.0;
 
 
@@ -256,7 +264,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl()
 
 //this function is automatically called if a mavlink attitude message arrives from the PIXHAWK
 //this function triggers the main-task function, which calculates the attitude rates setpoint
-void MulticopterAttitudeControl::attitude_cb(const mavros::Attitude msg)
+void MulticopterAttitudeControl::attitude_cb(const simulation::simout msg)
 {
 	_v_att.roll = msg.roll;
 	_v_att.pitch = msg.pitch;
@@ -318,9 +326,45 @@ double MulticopterAttitudeControl::get_dt()
 	return ros::Time::now().toSec() - helper;
 }
 
-void MulticopterAttitudeControl::mix_and_publish(void)
+void MulticopterAttitudeControl::mix_and_publish(void)	//this should eventually be in the VTOL folder
 {
-	ROS_INFO("We mix and then publish on mixer_out topic");
+
+	simulation::mixer_out msg;
+	float result[4] = {0,0,0,0};
+	mcMixer->mix(_actuators,result);
+
+	msg.throttle_0 = result[2];
+	msg.throttle_1 = result[3];
+	msg.throttle_2 = result[0];
+	msg.throttle_3 = result[1];
+
+	ROS_INFO("throttle 0 %.5f",msg.throttle_0);
+
+	//mix elevons and guard against to large values (JSBsim takes inputs between -1 and 1)
+	msg.aileron = _manual_control_sp.y;
+	if (msg.aileron > 1)
+	{
+		msg.aileron = 1;
+	}
+	else if (msg.aileron < -1)
+	{
+		msg.aileron = -1;
+	}
+
+
+	msg.elevator = _manual_control_sp.x;
+	if (msg.elevator > 1)
+	{
+		msg.elevator = 1;
+	}
+	else if (msg.elevator < -1)
+	{
+		msg.elevator = -1;
+	}
+
+
+
+	mixer_out_pub.publish(msg);
 }
 
 void MulticopterAttitudeControl::control_attitude(double dt)
