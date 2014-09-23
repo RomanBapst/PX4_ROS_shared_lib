@@ -66,6 +66,10 @@ add_message_files(
   Attitude.msg
   ManualControl.msg
   ArmedState.msg
+  AttitudeSetpoint.msg
+  AttitudeRateSetpoint.msg
+  Airspeed.msg
+  Actuator.msg
 )
 
 ## Generate services in the 'srv' folder
