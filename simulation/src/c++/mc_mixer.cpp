@@ -40,13 +40,21 @@ private:
 
 };
 
-
+/*
 const MultirotorMixer::Rotor _config_quadshot[] =
 {
 		{ -0.3223,  0.9466,   0.4242 },
 		{  0.3223, -0.9466,   1.0000 },
 		{  0.3223,  0.9466,  -0.4242 },
 		{ -0.3223, -0.9466,  -1.0000 },
+};
+*/
+const MultirotorMixer::Rotor _config_quadshot[] =
+{
+		{ -1.000000,  0.000000,  1.00 },
+		{  1.000000,  0.000000,  1.00 },
+		{  0.000000,  1.000000, -1.00 },
+		{ -0.000000, -1.000000, -1.00 },
 };
 
 const MultirotorMixer::Rotor *_config_index = {
