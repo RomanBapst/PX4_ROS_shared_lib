@@ -66,6 +66,8 @@
 #include <mavros/Actuator.h>
 
 #include <ros_error.h>
+
+using namespace std;
 /**
  * Fixedwing attitude control app start / stop handling function
  *
@@ -357,148 +359,7 @@ FixedwingAttitudeControl::task_main()
 	/* decide if in stabilized or full manual control */
 
 	if (_vcontrol_mode.flag_control_attitude_enabled) {
-					/* scale around tuning airspeed */
-
-			float airspeed;
-
-			/* if airspeed is not updating, we assume the normal average speed */
-			if (bool nonfinite = !std::isfinite(_airspeed.true_airspeed_m_s) ||
-			    elapsed_time(_airspeed.timestamp) > 1e6) {
-				airspeed = _parameters.airspeed_trim;
-
-			} else {
-				/* prevent numerical drama by requiring 0.5 m/s minimal speed */
-				airspeed = math::max(0.5f, _airspeed.true_airspeed_m_s);
-			}
-
-			/*
-			 * For scaling our actuators using anything less than the min (close to stall)
-			 * speed doesn't make any sense - its the strongest reasonable deflection we
-			 * want to do in flight and its the baseline a human pilot would choose.
-			 *
-			 * Forcing the scaling to this value allows reasonable handheld tests.
-			 */
-
-			float airspeed_scaling = _parameters.airspeed_trim / ((airspeed < _parameters.airspeed_min) ? _parameters.airspeed_min : airspeed);
-
-			float roll_sp = _parameters.rollsp_offset_rad;
-			float pitch_sp = _parameters.pitchsp_offset_rad;
-			float throttle_sp = 0.0f;
-
-			if (_vcontrol_mode.flag_control_velocity_enabled || _vcontrol_mode.flag_control_position_enabled) {
-				/* read in attitude setpoint from attitude setpoint uorb topic */
-				roll_sp = _att_sp.roll_body + _parameters.rollsp_offset_rad;
-				pitch_sp = _att_sp.pitch_body + _parameters.pitchsp_offset_rad;
-				throttle_sp = _att_sp.thrust;
-
-				/* reset integrals where needed */
-				if (_att_sp.roll_reset_integral) {
-					_roll_ctrl.reset_integrator();
-				}
-				if (_att_sp.pitch_reset_integral) {
-					_pitch_ctrl.reset_integrator();
-				}
-				if (_att_sp.yaw_reset_integral) {
-					_yaw_ctrl.reset_integrator();
-				}
-			} else {
-				/*
-				 * Scale down roll and pitch as the setpoints are radians
-				 * and a typical remote can only do around 45 degrees, the mapping is
-				 * -1..+1 to -man_roll_max rad..+man_roll_max rad (equivalent for pitch)
-				 *
-				 * With this mapping the stick angle is a 1:1 representation of
-				 * the commanded attitude.
-				 *
-				 * The trim gets subtracted here from the manual setpoint to get
-				 * the intended attitude setpoint. Later, after the rate control step the
-				 * trim is added again to the control signal.
-				 */
-				roll_sp = (_manual.y * _parameters.man_roll_max - _parameters.trim_roll)
-					+ _parameters.rollsp_offset_rad;
-				pitch_sp = -(_manual.x * _parameters.man_pitch_max - _parameters.trim_pitch)
-				+ _parameters.pitchsp_offset_rad;
-				throttle_sp = _manual.z;
-				_actuators.control[4] = _manual.flaps;
-
-				/*
-				 * in manual mode no external source should / does emit attitude setpoints.
-				 * emit the manual setpoint here to allow attitude controller tuning
-				 * in attitude control mode.
-				 */
-				struct vehicle_attitude_setpoint_s att_sp;
-				//att_sp.timestamp = hrt_absolute_time();
-				att_sp.roll_body = roll_sp;
-				att_sp.pitch_body = pitch_sp;
-				att_sp.yaw_body = 0.0f - _parameters.trim_yaw;
-				att_sp.thrust = throttle_sp;
-
-				//publish attitude setpoint
-				mavros::AttitudeSetpoint message;
-				fill_attitude_sp_msg(message,att_sp);
-				_attitude_sp_pub.publish(message);
-			}
-
-			/* Prepare speed_body_u and speed_body_w */
-			float speed_body_u = 0.0f;
-			float speed_body_v = 0.0f;
-			float speed_body_w = 0.0f;
-			if(_att.R_valid) 	{
-				speed_body_u = _att.R[0][0] * _global_pos.vel_n + _att.R[1][0] * _global_pos.vel_e + _att.R[2][0] * _global_pos.vel_d;
-				speed_body_v = _att.R[0][1] * _global_pos.vel_n + _att.R[1][1] * _global_pos.vel_e + _att.R[2][1] * _global_pos.vel_d;
-				speed_body_w = _att.R[0][2] * _global_pos.vel_n + _att.R[1][2] * _global_pos.vel_e + _att.R[2][2] * _global_pos.vel_d;
-			} else	{
-				ROS_INFO("Warning: Did not get a valid rotation matrix!");
-			}
-
-			/* Run attitude controllers */
-			if (std::isfinite(roll_sp) && std::isfinite(pitch_sp)) {
-				_roll_ctrl.control_attitude(roll_sp, _att.roll);
-				_pitch_ctrl.control_attitude(pitch_sp, _att.roll, _att.pitch, airspeed);
-				_yaw_ctrl.control_attitude(_att.roll, _att.pitch,
-						speed_body_u, speed_body_v, speed_body_w,
-						_roll_ctrl.get_desired_rate(), _pitch_ctrl.get_desired_rate()); //runs last, because is depending on output of roll and pitch attitude
-
-				/* Run attitude RATE controllers which need the desired attitudes from above, add trim */
-				float roll_u = _roll_ctrl.control_bodyrate(_att.pitch,
-						_att.rollspeed, _att.yawspeed,
-						_yaw_ctrl.get_desired_rate(),
-						_parameters.airspeed_min, _parameters.airspeed_max, airspeed, airspeed_scaling, lock_integrator);
-				_actuators.control[0] = (std::isfinite(roll_u)) ? roll_u + _parameters.trim_roll : _parameters.trim_roll;
-				if (!std::isfinite(roll_u)) {
-					_roll_ctrl.reset_integrator();
-					ROS_INFO("Warning: Roll output of roll-rate controller not finite!");
-				}
-
-				float pitch_u = _pitch_ctrl.control_bodyrate(_att.roll, _att.pitch,
-						_att.pitchspeed, _att.yawspeed,
-						_yaw_ctrl.get_desired_rate(),
-						_parameters.airspeed_min, _parameters.airspeed_max, airspeed, airspeed_scaling, lock_integrator);
-				_actuators.control[1] = (std::isfinite(pitch_u)) ? pitch_u + _parameters.trim_pitch : _parameters.trim_pitch;
-				ROS_INFO("Pitch: %.5f",pitch_u);
-				if (!std::isfinite(pitch_u)) {
-					_pitch_ctrl.reset_integrator();
-					ROS_INFO("Warning: Pitch output of pitch-rate controller not finite!");
-				}
-
-				float yaw_u = _yaw_ctrl.control_bodyrate(_att.roll, _att.pitch,
-						_att.pitchspeed, _att.yawspeed,
-						_pitch_ctrl.get_desired_rate(),
-						_parameters.airspeed_min, _parameters.airspeed_max, airspeed, airspeed_scaling, lock_integrator);
-				_actuators.control[2] = (std::isfinite(yaw_u)) ? yaw_u + _parameters.trim_yaw : _parameters.trim_yaw;
-				if (!std::isfinite(yaw_u)) {
-					_yaw_ctrl.reset_integrator();
-					ROS_INFO("Warning: Yaw output of yaw-rate controller not finite!");
-				}
-
-				/* throttle passed through */
-				_actuators.control[3] = (std::isfinite(throttle_sp)) ? throttle_sp : 0.0f;
-				if (!std::isfinite(throttle_sp)) {
-					ROS_INFO("Warning: Throttle setpoint not finite!");
-				}
-			} else {
-				ROS_INFO("Warning: Either roll or pitch setpoint not finite!");
-			}
+			control_attitude();
 
 			/*
 			 * Lazily publish the rate setpoint (for analysis, the actuators are published below)
@@ -508,6 +369,7 @@ FixedwingAttitudeControl::task_main()
 			rates_sp.roll = _roll_ctrl.get_desired_rate();
 			rates_sp.pitch = _pitch_ctrl.get_desired_rate();
 			rates_sp.yaw = _yaw_ctrl.get_desired_rate();
+			//TODO: publish this here!
 
 			//publish attitude setpoint
 			mavros::AttitudeRateSetpoint message;
@@ -531,8 +393,6 @@ FixedwingAttitudeControl::task_main()
 			mavros::Actuator message;
 			fill_actuator_msg(message,_actuators);
 			_actuators_virtual_5_pub.publish(message);
-
-
 		}
 
 
