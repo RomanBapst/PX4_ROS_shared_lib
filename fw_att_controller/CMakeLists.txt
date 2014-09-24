@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(fw_att_controller)
 
+set(PX4_DIR /home/roman/src/Firmware)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -9,6 +10,9 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
 )
+
+#set the __EXPORT macro to empty so that we don't get compiler errors
+set ( CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-D__EXPORT=")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -95,13 +99,18 @@ catkin_package(
 # include_directories(include)
 include_directories(
   include/fw_att_controller
+  ${PX4_DIR}/src
+  ${PX4_DIR}/src/lib
+  ${PX4_DIR}/src/modules
   ${catkin_INCLUDE_DIRS}
 )
 
 
-add_executable(fw_att_controller src/fw_att_controller.cpp src/math/Limits.cpp include/fw_att_controller/geo/geo.cpp
-  src/attitude_fw/ecl_roll_controller.cpp src/attitude_fw/ecl_pitch_controller.cpp src/attitude_fw/ecl_yaw_controller.cpp
- src/ecl_time_ROS.cpp)
+add_executable(fw_att_controller src/fw_att_controller.cpp ${PX4_DIR}/src/lib/mathlib/math/Limits.cpp include/fw_att_controller/geo/geo.cpp
+  ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_pitch_controller.cpp
+  ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_roll_controller.cpp
+  ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_yaw_controller.cpp
+ src/ecl_time_ROS.cpp src/ros_error.cpp src/perf_counter.cpp)
 target_link_libraries(fw_att_controller
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
@@ -170,3 +179,6 @@ target_link_libraries(fw_att_controller
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+
+
