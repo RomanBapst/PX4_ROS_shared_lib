@@ -50,13 +50,11 @@
 #include <math.h>
 #include <time.h>
 
-
 #include <ros/ros.h>
 
-#include <math/Vector.hpp>
-#include <math/Matrix.hpp>
-#include <math/Limits.hpp>
-#include <math/Quaternion.hpp>
+
+#include <mathlib/mathlib.h>
+
 #include <geo/geo.h>
 
 #include <mavros/ManualControl.h>
@@ -77,10 +75,14 @@
 #include <airspeed.h>
 #include <vehicle_global_position.h>
 
-#include <attitude_fw/ecl_pitch_controller.h>
-#include <attitude_fw/ecl_roll_controller.h>
-#include <attitude_fw/ecl_yaw_controller.h>
+#include <ecl/attitude_fw/ecl_pitch_controller.h>
+#include <ecl/attitude_fw/ecl_roll_controller.h>
+#include <ecl/attitude_fw/ecl_yaw_controller.h>
 
+#include <include/visibility.h>
+#include <systemlib/perf_counter.h>
+
+#include<ros_error.h>
 /**
  * Fixedwing attitude control app start / stop handling function
  *
@@ -142,6 +144,9 @@ private:
 
 	double time_last;	//used to measure elapsed time
 
+	perf_counter_t	_loop_perf;			/**< loop performance counter */
+	perf_counter_t	_nonfinite_input_perf;		/**< performance counter for non finite input */
+	perf_counter_t	_nonfinite_output_perf;		/**< performance counter for non finite output */
 
 
 	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
@@ -219,12 +224,17 @@ private:
 	void		fill_attitude_rate_sp_msg(mavros::AttitudeRateSetpoint &msg, struct vehicle_rates_setpoint_s &rates_sp);
 	void 		fill_actuator_msg(mavros::Actuator &msg,struct actuator_controls_s &actuators);
 
+	void control_attitude();
+
 };
 
 
 
 FixedwingAttitudeControl::FixedwingAttitudeControl() :
-
+	/* performance counters */
+	_loop_perf(perf_alloc(PC_ELAPSED, "fw att control")),
+	_nonfinite_input_perf(perf_alloc(PC_COUNT, "fw att control nonfinite input")),
+	_nonfinite_output_perf(perf_alloc(PC_COUNT, "fw att control nonfinite output")),
 	/* states */
 	_setpoint_valid(false),
 	_debug(false)
@@ -242,6 +252,7 @@ FixedwingAttitudeControl::FixedwingAttitudeControl() :
 
 	//setup time variable, this is used by the class-method 'get_dt()'
 	time_last = ros::Time::now().toSec();
+
 
 	/* safely initialize structs */
 	_att = {};
@@ -431,6 +442,9 @@ void FixedwingAttitudeControl::fill_actuator_msg(mavros::Actuator &msg,struct ac
 void
 FixedwingAttitudeControl::task_main()
 {
+	static int loop_counter = 0;
+	perf_begin(_loop_perf);
+
 	float dt = get_dt();
 	//protect against too small or too large dt
 	if (dt < 0.002f)
@@ -463,8 +477,7 @@ FixedwingAttitudeControl::task_main()
 	/* decide if in stabilized or full manual control */
 
 	if (_vcontrol_mode.flag_control_attitude_enabled) {
-
-			/* scale around tuning airspeed */
+					/* scale around tuning airspeed */
 
 			float airspeed;
 
@@ -582,7 +595,7 @@ FixedwingAttitudeControl::task_main()
 						_yaw_ctrl.get_desired_rate(),
 						_parameters.airspeed_min, _parameters.airspeed_max, airspeed, airspeed_scaling, lock_integrator);
 				_actuators.control[1] = (std::isfinite(pitch_u)) ? pitch_u + _parameters.trim_pitch : _parameters.trim_pitch;
-				ROS_INFO("Pitch output: %.5f",pitch_u);
+				warnx("Pitch output");
 				if (!std::isfinite(pitch_u)) {
 					_pitch_ctrl.reset_integrator();
 					ROS_INFO("Warning: Pitch output of pitch-rate controller not finite!");
