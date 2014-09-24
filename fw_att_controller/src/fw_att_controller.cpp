@@ -51,7 +51,7 @@
 #include <time.h>
 
 #include <ros/ros.h>
-
+#include <modules/fw_att_control/fw_att_control_base.h>
 
 #include <mathlib/mathlib.h>
 
@@ -65,31 +65,14 @@
 #include <mavros/Airspeed.h>
 #include <mavros/Actuator.h>
 
-#include <manual_control_setpoint.h>
-#include <vehicle_attitude.h>
-#include <vehicle_attitude_setpoint.h>
-#include <vehicle_rates_setpoint.h>
-#include <vehicle_control_mode.h>
-#include <actuator_armed.h>
-#include <actuator_controls.h>
-#include <airspeed.h>
-#include <vehicle_global_position.h>
-
-#include <ecl/attitude_fw/ecl_pitch_controller.h>
-#include <ecl/attitude_fw/ecl_roll_controller.h>
-#include <ecl/attitude_fw/ecl_yaw_controller.h>
-
-#include <include/visibility.h>
-#include <systemlib/perf_counter.h>
-
-#include<ros_error.h>
+#include <ros_error.h>
 /**
  * Fixedwing attitude control app start / stop handling function
  *
  * @ingroup apps
  */
 
-class FixedwingAttitudeControl
+class FixedwingAttitudeControl: public FixedwingAttitudeControlBase
 {
 public:
 	/**
@@ -102,35 +85,9 @@ public:
 	 */
 	~FixedwingAttitudeControl(){};
 
-	/**
-	 * Start the sensors task.
-	 *
-	 * @return	OK on success.
-	 */
-	int		start();
 
-	/**
-	 * Task status
-	 *
-	 * @return	true if the mainloop is running
-	 */
-	bool		task_running() { return _task_running; }
 
 private:
-
-	bool		_task_should_exit;		/**< if true, sensor task should exit */
-	bool		_task_running;			/**< if true, task is running in its mainloop */
-	int		_control_task;			/**< task handle for sensor task */
-
-	int		_att_sub;			/**< vehicle attitude subscription */
-	int		_accel_sub;			/**< accelerometer subscription */
-	int		_att_sp_sub;			/**< vehicle attitude setpoint */
-	int		_attitude_sub;			/**< raw rc channels data subscription */
-	int		_airspeed_sub;			/**< airspeed subscription */
-	int		_vcontrol_mode_sub;		/**< vehicle status subscription */
-	int 		_params_sub;			/**< notification of parameter updates */
-	int 		_manual_sub;			/**< notification of manual control updates */
-	int		_global_pos_sub;		/**< global position subscription */
 
 	ros::NodeHandle n;
 	ros::Subscriber attitude_sub;
@@ -144,71 +101,11 @@ private:
 
 	double time_last;	//used to measure elapsed time
 
-	perf_counter_t	_loop_perf;			/**< loop performance counter */
-	perf_counter_t	_nonfinite_input_perf;		/**< performance counter for non finite input */
-	perf_counter_t	_nonfinite_output_perf;		/**< performance counter for non finite output */
-
-
-	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
-	struct vehicle_attitude_setpoint_s		_att_sp;		/**< vehicle attitude setpoint */
-	struct manual_control_setpoint_s		_manual;		/**< r/c channel data */
-	struct airspeed_s				_airspeed;		/**< airspeed */
-	struct vehicle_control_mode_s			_vcontrol_mode;		/**< vehicle control mode */
-	struct actuator_controls_s			_actuators;		/**< actuator control inputs */
-	struct actuator_controls_s			_actuators_airframe;	/**< actuator control inputs */
-	struct vehicle_global_position_s		_global_pos;		/**< global position */
-
-
 
 	bool		_setpoint_valid;		/**< flag if the position control setpoint is valid */
 	bool		_debug;				/**< if set to true, print debug output */
 
-	struct {
-		float tconst;
-		float p_p;
-		float p_d;
-		float p_i;
-		float p_ff;
-		float p_rmax_pos;
-		float p_rmax_neg;
-		float p_integrator_max;
-		float p_roll_feedforward;
-		float r_p;
-		float r_d;
-		float r_i;
-		float r_ff;
-		float r_integrator_max;
-		float r_rmax;
-		float y_p;
-		float y_i;
-		float y_d;
-		float y_ff;
-		float y_roll_feedforward;
-		float y_integrator_max;
-		float y_coordinated_min_speed;
-		float y_rmax;
 
-		float airspeed_min;
-		float airspeed_trim;
-		float airspeed_max;
-
-		float trim_roll;
-		float trim_pitch;
-		float trim_yaw;
-		float rollsp_offset_deg;			/**< Roll Setpoint Offset in deg */
-		float pitchsp_offset_deg;			/**< Pitch Setpoint Offset in deg */
-		float rollsp_offset_rad;			/**< Roll Setpoint Offset in rad */
-		float pitchsp_offset_rad;			/**< Pitch Setpoint Offset in rad */
-		float man_roll_max;						/**< Max Roll in rad */
-		float man_pitch_max;					/**< Max Pitch in rad */
-
-	}		_parameters;			/**< local copies of interesting parameters */
-
-
-
-	ECL_RollController				_roll_ctrl;
-	ECL_PitchController				_pitch_ctrl;
-	ECL_YawController				_yaw_ctrl;
 
 
 
@@ -224,21 +121,13 @@ private:
 	void		fill_attitude_rate_sp_msg(mavros::AttitudeRateSetpoint &msg, struct vehicle_rates_setpoint_s &rates_sp);
 	void 		fill_actuator_msg(mavros::Actuator &msg,struct actuator_controls_s &actuators);
 
-	void control_attitude();
 
 };
 
 
 
-FixedwingAttitudeControl::FixedwingAttitudeControl() :
-	/* performance counters */
-	_loop_perf(perf_alloc(PC_ELAPSED, "fw att control")),
-	_nonfinite_input_perf(perf_alloc(PC_COUNT, "fw att control nonfinite input")),
-	_nonfinite_output_perf(perf_alloc(PC_COUNT, "fw att control nonfinite output")),
-	/* states */
-	_setpoint_valid(false),
-	_debug(false)
-{
+FixedwingAttitudeControl::FixedwingAttitudeControl()
+	{
 
 	//setup all subscribers
 	attitude_sub 		= n.subscribe("mavros/imu/Attitude",1000,&FixedwingAttitudeControl::attitude_cb,this);
@@ -254,15 +143,6 @@ FixedwingAttitudeControl::FixedwingAttitudeControl() :
 	time_last = ros::Time::now().toSec();
 
 
-	/* safely initialize structs */
-	_att = {};
-	_att_sp = {};
-	_manual = {};
-	_airspeed = {};
-	_vcontrol_mode = {};
-	_actuators = {};
-	_actuators_airframe = {};
-	_global_pos = {};
 
 	_vcontrol_mode.flag_armed 						= true;
 	_vcontrol_mode.flag_control_altitude_enabled 	= false;
@@ -595,7 +475,7 @@ FixedwingAttitudeControl::task_main()
 						_yaw_ctrl.get_desired_rate(),
 						_parameters.airspeed_min, _parameters.airspeed_max, airspeed, airspeed_scaling, lock_integrator);
 				_actuators.control[1] = (std::isfinite(pitch_u)) ? pitch_u + _parameters.trim_pitch : _parameters.trim_pitch;
-				warnx("Pitch output");
+				ROS_INFO("Pitch: %.5f",pitch_u);
 				if (!std::isfinite(pitch_u)) {
 					_pitch_ctrl.reset_integrator();
 					ROS_INFO("Warning: Pitch output of pitch-rate controller not finite!");
