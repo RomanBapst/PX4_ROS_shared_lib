@@ -42,20 +42,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <cmath>
 #include <math.h>
-#include <time.h>
 
 #include <ros/ros.h>
+#include <ros_error.h>	//this should also be replaced by systemlib/err.h
 #include <modules/fw_att_control/fw_att_control_base.h>
 
 #include <mathlib/mathlib.h>
-
-#include <geo/geo.h>
+#include <drivers/drv_hrt.h>
 
 #include <mavros/ManualControl.h>
 #include <mavros/AttitudeRates.h>
@@ -65,9 +60,7 @@
 #include <mavros/Airspeed.h>
 #include <mavros/Actuator.h>
 
-#include <ros_error.h>
-
-using namespace std;
+using namespace std;	//this is needed for the isfinite function call
 /**
  * Fixedwing attitude control app start / stop handling function
  *
@@ -87,15 +80,11 @@ public:
 	 */
 	~FixedwingAttitudeControl(){};
 
-
-
 private:
-
 	ros::NodeHandle n;
 	ros::Subscriber attitude_sub;
 	ros::Subscriber manual_control_sub;
 	ros::Subscriber airspeed_sub;
-
 
 	ros::Publisher _actuators_virtual_5_pub;
 	ros::Publisher _attitude_sp_pub;
@@ -103,19 +92,12 @@ private:
 
 	double time_last;	//used to measure elapsed time
 
-
 	bool		_setpoint_valid;		/**< flag if the position control setpoint is valid */
 	bool		_debug;				/**< if set to true, print debug output */
 
 
-
-
-
-
+/////////////// Member Functions ///////////////////////////////////////////////////////////////////
 	void		task_main();
-	double		get_dt();
-	uint64_t	elapsed_time(uint64_t &time_ref);
-
 	void 		attitude_cb(mavros::Attitude msg);
 	void 		manual_control_cb(mavros::ManualControl msg);
 	void 		airspeed_cb(mavros::Airspeed msg);
@@ -228,20 +210,6 @@ FixedwingAttitudeControl::FixedwingAttitudeControl()
 }
 
 
-
-double FixedwingAttitudeControl::get_dt()
-{
-	double helper = time_last;
-	time_last 	  = ros::Time::now().toSec();
-	return ros::Time::now().toSec() - helper;
-
-}
-
-uint64_t FixedwingAttitudeControl::elapsed_time(uint64_t &time_ref)
-{
-	return (ros::Time::now().toNSec() - time_ref) / 1e3;	//maybe should guard against negative values
-}
-
 //this function is automatically called if a mavlink attitude message arrives from the PIXHAWK
 //this function triggers the main-task function, which calculates the attitude rates setpoint
 void FixedwingAttitudeControl::attitude_cb(const mavros::Attitude msg)
@@ -324,29 +292,28 @@ void FixedwingAttitudeControl::fill_actuator_msg(mavros::Actuator &msg,struct ac
 void
 FixedwingAttitudeControl::task_main()
 {
+
 	static int loop_counter = 0;
 	perf_begin(_loop_perf);
 
-	float dt = get_dt();
-	//protect against too small or too large dt
-	if (dt < 0.002f)
-	{
-		dt = 0.002f;
-	}
-	else if (dt > 0.02f)
-	{
-		dt = 0.02f;
-	}
 
-	/* lock integrator until control is started */
-	bool lock_integrator;
+	static uint64_t last_run = 0;
+	float deltaT = (hrt_absolute_time() - last_run) / 1000000.0f;
+	last_run = hrt_absolute_time();
 
-	if (_vcontrol_mode.flag_control_attitude_enabled) {
-		lock_integrator = false;
+	/* guard against too large deltaT's */
+	if (deltaT > 1.0f)
+		deltaT = 0.01f;
 
-	} else {
-		lock_integrator = true;
-	}
+//	/* lock integrator until control is started */
+//	bool lock_integrator;
+//
+//	if (_vcontrol_mode.flag_control_attitude_enabled) {
+//		lock_integrator = false;
+//
+//	} else {
+//		lock_integrator = true;
+//	}
 
 	/* Simple handling of failsafe: deploy parachute if failsafe is on */
 	if (_vcontrol_mode.flag_control_termination_enabled) {
@@ -361,39 +328,38 @@ FixedwingAttitudeControl::task_main()
 	if (_vcontrol_mode.flag_control_attitude_enabled) {
 			control_attitude();
 
-			/*
-			 * Lazily publish the rate setpoint (for analysis, the actuators are published below)
-			 * only once available
-			 */
-			vehicle_rates_setpoint_s rates_sp;
-			rates_sp.roll = _roll_ctrl.get_desired_rate();
-			rates_sp.pitch = _pitch_ctrl.get_desired_rate();
-			rates_sp.yaw = _yaw_ctrl.get_desired_rate();
-			//TODO: publish this here!
+		/*
+		 * Lazily publish the rate setpoint (for analysis, the actuators are published below)
+		 * only once available
+		 */
+		vehicle_rates_setpoint_s rates_sp;
+		rates_sp.roll = _roll_ctrl.get_desired_rate();
+		rates_sp.pitch = _pitch_ctrl.get_desired_rate();
+		rates_sp.yaw = _yaw_ctrl.get_desired_rate();
 
-			//publish attitude setpoint
-			mavros::AttitudeRateSetpoint message;
-			fill_attitude_rate_sp_msg(message,rates_sp);
-			_rate_sp_pub.publish(message);
+		//publish attitude setpoint
+		mavros::AttitudeRateSetpoint message;
+		fill_attitude_rate_sp_msg(message,rates_sp);
+		_rate_sp_pub.publish(message);
 
-			} else {
-				/* manual/direct control */
-				_actuators.control[0] = _manual.y;
-				_actuators.control[1] = -_manual.x;
-				_actuators.control[2] = _manual.r;
-				_actuators.control[3] = _manual.z;
-				_actuators.control[4] = _manual.flaps;
-			}
+	} else {
+		/* manual/direct control */
+		_actuators.control[0] = _manual.y;
+		_actuators.control[1] = -_manual.x;
+		_actuators.control[2] = _manual.r;
+		_actuators.control[3] = _manual.z;
+		_actuators.control[4] = _manual.flaps;
+	}
 
-			_actuators.control[5] = _manual.aux1;
-			_actuators.control[6] = _manual.aux2;
-			_actuators.control[7] = _manual.aux3;
+	_actuators.control[5] = _manual.aux1;
+	_actuators.control[6] = _manual.aux2;
+	_actuators.control[7] = _manual.aux3;
 
-			//publish the actuator setpoints
-			mavros::Actuator message;
-			fill_actuator_msg(message,_actuators);
-			_actuators_virtual_5_pub.publish(message);
-		}
+	//publish the actuator setpoints
+	mavros::Actuator message;
+	fill_actuator_msg(message,_actuators);
+	_actuators_virtual_5_pub.publish(message);
+}
 
 
 
