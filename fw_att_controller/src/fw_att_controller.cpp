@@ -46,7 +46,7 @@
 #include <math.h>
 
 #include <ros/ros.h>
-#include <ros_error.h>	//this should also be replaced by systemlib/err.h
+//#include <ros_error.h>	//this should also be replaced by systemlib/err.h
 #include <modules/fw_att_control/fw_att_control_base.h>
 
 #include <mathlib/mathlib.h>
