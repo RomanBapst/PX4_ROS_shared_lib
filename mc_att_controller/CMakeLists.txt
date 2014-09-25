@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(mc_att_controller)
 
+set(PX4_DIR /home/roman/src/Firmware)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -10,6 +11,10 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
 )
+
+
+#set the __EXPORT macro to empty so that we don't get compiler errors
+set ( CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-D__EXPORT=")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -95,8 +100,12 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  ${catkin_INCLUDE_DIRS}
   include/mc_att_controller
+  ${PX4_DIR}/src
+  ${PX4_DIR}/src/lib
+  ${PX4_DIR}/src/modules
+  ${PX4_DIR}/Tools/tests-host
+  ${catkin_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
@@ -105,7 +114,8 @@ include_directories(
 # )
 
 ## Declare a cpp executable
-# add_executable(mc_att_controller_node src/mc_att_controller_node.cpp)
+# add_executable(mc_att_controller_node src/mc_att_controller_node.cpp 
+ 
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -116,7 +126,11 @@ include_directories(
 #   ${catkin_LIBRARIES}
 # )
 
-add_executable(mc_att_controller src/mc_att_control_main.cpp include/mc_att_controller/math/Limits.cpp include/mc_att_controller/geo/geo.cpp)
+add_executable(mc_att_controller src/mc_att_control_main.cpp
+  ${PX4_DIR}/src/modules/mc_att_control/mc_att_control_base.cpp
+  ${PX4_DIR}/src/lib/mathlib/math/Limits.cpp
+  src/perf_counter.cpp src/hrt.cpp src/geo.cpp
+)
 target_link_libraries(mc_att_controller
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
