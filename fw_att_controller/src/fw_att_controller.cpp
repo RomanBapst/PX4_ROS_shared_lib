@@ -305,15 +305,6 @@ FixedwingAttitudeControl::task_main()
 	if (deltaT > 1.0f)
 		deltaT = 0.01f;
 
-//	/* lock integrator until control is started */
-//	bool lock_integrator;
-//
-//	if (_vcontrol_mode.flag_control_attitude_enabled) {
-//		lock_integrator = false;
-//
-//	} else {
-//		lock_integrator = true;
-//	}
 
 	/* Simple handling of failsafe: deploy parachute if failsafe is on */
 	if (_vcontrol_mode.flag_control_termination_enabled) {
