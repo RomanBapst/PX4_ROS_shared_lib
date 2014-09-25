@@ -102,6 +102,7 @@ include_directories(
   ${PX4_DIR}/src
   ${PX4_DIR}/src/lib
   ${PX4_DIR}/src/modules
+  ${PX4_DIR}/Tools/tests-host
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -110,7 +111,8 @@ add_executable(fw_att_controller src/fw_att_controller.cpp ${PX4_DIR}/src/lib/ma
   ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_pitch_controller.cpp
   ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_roll_controller.cpp
   ${PX4_DIR}/src/lib/ecl/attitude_fw/ecl_yaw_controller.cpp
- src/ecl_time_ROS.cpp src/ros_error.cpp src/perf_counter.cpp)
+  ${PX4_DIR}/src/modules/fw_att_control/fw_att_control_base.cpp
+  src/ros_error.cpp src/perf_counter.cpp src/hrt.cpp)
 target_link_libraries(fw_att_controller
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
